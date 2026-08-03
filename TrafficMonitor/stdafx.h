@@ -77,7 +77,8 @@ using std::ofstream;
 #define WM_REINIT_CONNECTION (WM_USER+1011)         //工作线程检测到需要重新初始化网络连接时 PostMessage 到 UI 线程（wParam=0执行IniConnection，1执行AutoSelect）。
                                                     //IniConnection/AutoSelect 会释放重建 m_pIfTable、修改 m_connections 和菜单，不能在工作线程直接调用
 
-#define WM_NEXT_USER_MSG (WM_USER+1012)
+#define WM_SPACER_LAYOUT_CHANGED (WM_USER+1012)     // Tray reservation layout changed
+#define WM_NEXT_USER_MSG (WM_USER+1013)
 
 //#define CONFIG_PATH _T(".\\config.ini")
 //#define CONFIG_PATHA ".\\config.ini"
