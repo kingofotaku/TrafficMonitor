@@ -265,6 +265,8 @@ void CTrafficMonitorApp::LoadConfig()
     m_taskbar_data.netspeed_figure_max_value = ini.GetInt(L"task_bar", L"netspeed_figure_max_value", 10);
     m_taskbar_data.netspeed_figure_max_value_unit = ini.GetInt(L"task_bar", L"netspeed_figure_max_value_unit", 1);
     m_taskbar_data.graph_color_following_system = ini.GetBool(L"task_bar", L"graph_color_following_system", true);
+    m_taskbar_data.specify_each_item_graph_color = ini.GetBool(L"task_bar", L"specify_each_item_graph_color", false);
+    ini.LoadTaskbarWndGraphColors(L"task_bar_graph_color", m_taskbar_data.graph_colors);
 
     if (CTaskBarDlgDrawCommonSupport::CheckSupport())
         m_taskbar_data.disable_d2d = ini.GetBool(L"task_bar", L"disable_d2d", true);
@@ -421,6 +423,8 @@ void CTrafficMonitorApp::SaveConfig()
     ini.WriteInt(L"task_bar", L"netspeed_figure_max_value", m_taskbar_data.netspeed_figure_max_value);
     ini.WriteInt(L"task_bar", L"netspeed_figure_max_value_unit", m_taskbar_data.netspeed_figure_max_value_unit);
     ini.WriteBool(L"task_bar", L"graph_color_following_system", m_taskbar_data.graph_color_following_system);
+    ini.WriteBool(L"task_bar", L"specify_each_item_graph_color", m_taskbar_data.specify_each_item_graph_color);
+    ini.SaveTaskbarWndGraphColors(L"task_bar_graph_color", m_taskbar_data.graph_colors);
 
     ini.WriteBool(L"task_bar", L"disable_d2d", m_taskbar_data.disable_d2d);
     ini.WriteBool(L"task_bar", L"enable_colorful_emoji", m_taskbar_data.enable_colorful_emoji);
@@ -656,7 +660,11 @@ UINT CTrafficMonitorApp::InitOpenHardwareMonitorLibThreadFunc(LPVOID lpParam)
     theApp.m_pMonitor = OpenHardwareMonitorApi::CreateInstance();
     if (theApp.m_pMonitor == nullptr)
     {
+        //弹窗前必须先释放临界区：持有 m_minitor_lib_critical 期间弹模态框会阻塞监控工作线程，
+        //导致退出时 ExitMonitorThread 等待超时后析构成员引发 use-after-free
+        sync.Unlock();
         AfxMessageBox(OpenHardwareMonitorApi::GetErrorMessage().c_str(), MB_ICONERROR | MB_OK);
+        sync.Lock();
     }
     //设置硬件监控的启用状态
     theApp.UpdateOpenHardwareMonitorEnableState();
@@ -1046,6 +1054,9 @@ BOOL CTrafficMonitorApp::InitInstance()
     //初始化GDI+
     Gdiplus::GdiplusStartupInput gdiplusStartupInput;
     GdiplusStartup(&m_gdiplusToken, &gdiplusStartupInput, NULL);
+
+    //初始时使用屏幕DPI
+    DPIFromWindow(nullptr);
 
     //载入插件
     LoadPluginDisabledSettings();
@@ -1531,7 +1542,14 @@ void* CTrafficMonitorApp::GetMainWindowHwnd()
 
 void* CTrafficMonitorApp::GetTaskbarWindowHwnd()
 {
-    return CTrafficMonitorDlg::Instance()->GetTaskbarWindow()->GetSafeHwnd();
+    // 插件可能在主对话框创建前（OnInitialize 时）或销毁后调用，Instance() 会返回空指针
+    CTrafficMonitorDlg* pMainWnd = CTrafficMonitorDlg::Instance();
+    if (pMainWnd == nullptr)
+        return nullptr;
+    CTaskBarDlg* pTaskbarWnd = pMainWnd->GetTaskbarWindow();
+    if (pTaskbarWnd == nullptr)
+        return nullptr;
+    return pTaskbarWnd->GetSafeHwnd();
 }
 
 const wchar_t* CTrafficMonitorApp::GetStringRes(const wchar_t* key, const wchar_t* section)
