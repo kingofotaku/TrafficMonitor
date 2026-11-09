@@ -821,6 +821,29 @@ void CTaskBarDlg::CalculateWindowSize()
         }
     }
 
+    //Fit the leading unlabeled speed column to its wider row, keeping numeric alignment.
+    if (UseCompactOuterMargins() && !horizontal_arrange && m_item_widths.size() >= 2
+        && theApp.m_taskbar_data.value_right_align)
+    {
+        const auto is_unlabeled_speed = [](const ItemWidthInfo& item)
+        {
+            return !item.IsPlugin() && item.item_width.label_width == 0
+                && (item.ItemType() == TDI_UP || item.ItemType() == TDI_DOWN
+                    || item.ItemType() == TDI_TOTAL_SPEED);
+        };
+        if (is_unlabeled_speed(m_item_widths[0]) && is_unlabeled_speed(m_item_widths[1]))
+        {
+            for (size_t i = 0; i < 2; i++)
+            {
+                auto& item = m_item_widths[i];
+                const CString value = item.GetItemValueText(false);
+                if (!value.IsEmpty())
+                    item.item_width.value_width = min(item.item_width.value_width,
+                        static_cast<int>(m_pDC->GetTextExtent(value).cx) + DPI(1));
+            }
+        }
+    }
+
     int item_count = static_cast<int>(m_item_widths.size());
 
     auto last_window_width{ m_window_width };

@@ -512,14 +512,19 @@ void CTaskbarTrayReserve::SetReservedWidth(int width)
         EnsureWinEventHook();
     }
 
-    //图标都添加成功了，却始终拿不到可用的预留区域，说明这一批GUID已经作废——
-    //它们的注册表项被删过，外壳记得这些身份但再也不会为它们写回项，于是永远无法显示。
-    //这种状态自己是好不了的，只能换一批全新的身份重来。
-    //Icons all added successfully yet no usable region ever appears: this batch of GUIDs is dead.
-    //Their registry entries were deleted at some point, so the shell remembers the identities but
-    //will never write entries for them again and they can never be shown. That state cannot
-    //recover on its own; the only way out is a fresh batch of identities.
-    if (!m_ever_valid && m_first_icon_tick != 0 && m_guid_block + 1 < MAX_GUID_BLOCKS
+    //A partial measurement must not disable recovery for the rest of this session.
+    bool complete{};
+    {
+        std::lock_guard<std::mutex> lock(m_rect_mutex);
+        complete = m_reserved_valid && m_reserved_count == static_cast<int>(m_icons.size())
+            && m_reserved_rect.Width() >= width;
+    }
+    if (complete || width <= 0)
+        m_first_icon_tick = 0;
+    else if (!m_icons.empty() && m_first_icon_tick == 0)
+        m_first_icon_tick = GetTickCount64();
+
+    if (m_first_icon_tick != 0 && m_guid_block + 1 < MAX_GUID_BLOCKS
         && GetTickCount64() - m_first_icon_tick > ROTATE_GRACE)
     {
         for (int index : m_icons)
@@ -804,8 +809,6 @@ void CTaskbarTrayReserve::QueryThreadProc()
             changed = (valid != m_reserved_valid) || (valid && union_rect != m_reserved_rect);
             m_reserved_valid = valid;
             if (valid)
-                m_ever_valid = true;        //这一批GUID是好用的 / this batch works
-            if (valid)
             {
                 m_reserved_rect = union_rect;
                 //Dividing the region by the number of icons that actually form it is the
@@ -938,7 +941,6 @@ void CTaskbarTrayReserve::Destroy(bool purge_keys)
         m_guid_block = 0;
     }
     m_first_icon_tick = 0;
-    m_ever_valid = false;
 
     if (m_wnd != nullptr)
     {

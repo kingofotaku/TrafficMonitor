@@ -160,5 +160,23 @@ At zero horizontal offset, align the readout with the reserved block's left edge
 so the tray overflow button is adjacent to the readout. Reserve only the actual
 readout width, rounded up to whole tray slots; do not add outer padding or center
 the readout inside leftover slot space. Preserve the font, colors, numeric
-alignment, item spacing and the non-reservation placement path. Runtime acceptance
+alignment, item spacing and the non-reservation placement path. The first unlabeled
+network-speed pair fits its wider current row rather than the four-digit sample.
+Refresh this measurement in the existing placement tick so growing values remain readable.
+Runtime acceptance
 checks zero left inset, containment inside the reserved slots, and taskbar response.
+
+### Incomplete reservation recovery
+
+A successful API add or one measured slot does not establish a usable reservation.
+Clear the recovery timer only when the measured count matches the registered count
+and the region is wide enough for the readout. A partial block that remains unusable
+for six seconds rotates through the existing bounded GUID batches. Maintenance must
+run before the obstruction check, including while the readout is hidden. Genuine
+foreign-icon obstruction with all own slots present keeps the existing wait behavior.
+
+For primary horizontal reservation, keep the readout hidden until a usable region
+exists; never fall back onto task buttons after a timeout. Secondary/vertical and
+reservation-disabled placement retain their previous behavior. Regression acceptance
+includes one missing own slot recovering within the same Explorer PID, alongside
+visible text-to-chevron spacing; window-edge equality alone is insufficient.

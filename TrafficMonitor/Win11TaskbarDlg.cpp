@@ -16,6 +16,9 @@ void CWin11TaskbarDlg::AdjustTaskbarWndPos(bool force_adjust)
     if (::GetWindowRect(m_hStart, m_rcStart) && !m_rcStart.IsRectEmpty())
         m_rcStart.MoveToXY(m_rcStart.left - m_rcTaskbar.left, m_rcStart.top - m_rcTaskbar.top);
 
+    if (UseCompactOuterMargins())
+        CalculateWindowSize();
+
     //Window size
     m_rect.right = m_rect.left + m_window_width;
     m_rect.bottom = m_rect.top + m_window_height;
@@ -47,7 +50,7 @@ void CWin11TaskbarDlg::AdjustTaskbarWndPos(bool force_adjust)
     //placeholders accomplish nothing; a contiguous run also cannot form a clean rectangle there
     //and would enclose other icons. Skip the reservation entirely and fall back to ordinary
     //placement; the settings checkbox is greyed out and says why.
-    if (theApp.m_taskbar_data.reserve_taskbar_space && m_taskbar_on_top_or_bottom)
+    if (UseCompactOuterMargins())
     {
         //重新打开了，下次关闭时要再清理一遍 / re-armed: sweep again next time it is switched off
         m_purged_for_off = false;
@@ -57,42 +60,12 @@ void CWin11TaskbarDlg::AdjustTaskbarWndPos(bool force_adjust)
             SetTimer(SPACER_ADJUST_TIMER, SPACER_ADJUST_INTERVAL, nullptr);
             m_tray_timer_started = true;
         }
-        //有别的图标被拖进了预留区域里。这时把窗口藏起来，绝不能照常摆上去——
-        //摆上去就正好盖在那个图标上面，用户既看不见它也点不到它，
-        //看起来就像图标被卡在窗口底下了。图标被拖走之后自动恢复显示。
-        //Another icon has been dragged into the reserved region. Hide the window rather than
-        //placing it as usual: placing it would cover that icon, which could then be neither
-        //seen nor clicked - it looks like the icon is trapped underneath. It comes back by
-        //itself once the icon is dragged away.
-        if (m_tray_reserve.IsInited() && m_tray_reserve.IsObstructed())
-        {
-            if (IsWindowVisible())
-                ShowWindow(SW_HIDE);
-            return;
-        }
-        //Once the placeholders exist the window sits on them and nothing else applies
+        //Maintenance must run even when a missing slot has made the block unusable.
         if (UpdateTrayReserve())
             return;
-        //预留区域还没建好（刚启动时占位图标是一个一个加进去的，需要一两秒）。
-        //这段时间里就让窗口保持隐藏，不要先按普通方式摆出来。
-        //否则启动时会先在任务栏按钮上面闪一下，等区域建好了再跳到预留位置上去，
-        //而且每加一个占位图标托盘就变宽一点、普通位置也跟着往左挪，看起来一直在抖。
-        //宁可晚一点出现，也不要出现在错误的位置上。
-        //超过期限仍然建不起来，就往下走按普通方式摆放——总不能一直不显示。
-        //The reserved region is not ready yet: at startup the placeholders are added one per
-        //tick and take a second or two. Keep the window hidden for that period instead of
-        //placing it the ordinary way first. Otherwise startup shows it flashing on top of the
-        //task buttons and then jumping into the reserved block - and since every placeholder
-        //added widens the tray, the ordinary position keeps sliding left in the meantime, so it
-        //visibly jitters. Better to appear slightly later than to appear in the wrong place.
-        //If the deadline passes without a region, fall through and place normally; never
-        //staying visible at all is not an option.
-        if (GetTickCount64() < HoldDeadline())
-        {
-            if (IsWindowVisible())
-                ShowWindow(SW_HIDE);
-            return;
-        }
+        if (IsWindowVisible())
+            ShowWindow(SW_HIDE);
+        return;
     }
     else
     {
@@ -127,8 +100,6 @@ void CWin11TaskbarDlg::AdjustTaskbarWndPos(bool force_adjust)
             m_tray_timer_started = false;
         }
         m_last_reserved_rect.SetRectEmpty();
-        //开关被重新打开时应当重新计时 / re-arm the hold clock if the option is switched back on
-        m_hold_deadline = 0;
     }
 
     //Make sure the window is visible
@@ -229,10 +200,12 @@ bool CWin11TaskbarDlg::UpdateTrayReserve()
     //Hand it this monitor's DPI. Docking, undocking or moving to a differently scaled screen
     //changes the tray icon pitch, and the estimate has to be re-measured.
     m_tray_reserve.SetDpi(GetDPI());
-    //按窗口实际需要的宽度预留，两边各留一点空白。
+    //仅按窗口实际需要的宽度预留，不添加外围空白。
     //这里用的是实际算出来的窗口宽度，因此无论配置了多少个显示项目都能自动适应。
     //Reserve the readout width; whole-slot rounding provides any remaining space.
     m_tray_reserve.SetReservedWidth(m_window_width);
+    if (m_tray_reserve.IsObstructed())
+        return false;
 
     CRect rc_reserved{ 0, 0, 0, 0 };    //CRect's default constructor does not zero it
     const bool have_rect = m_tray_reserve.GetReservedRect(rc_reserved);
@@ -261,23 +234,14 @@ bool CWin11TaskbarDlg::UpdateTrayReserve()
         m_last_reserved_rect = rc_reserved;
         MoveWindow(m_rect);
     }
-    //成功摆上去了，把保持原位的计时清掉，下次区域再出问题时重新计时
-    //Placed successfully - clear the hold timer so it restarts if the region is lost again
-    m_hold_deadline = 0;
     return true;
-}
-
-ULONGLONG CWin11TaskbarDlg::HoldDeadline()
-{
-    if (m_hold_deadline == 0)
-        m_hold_deadline = GetTickCount64() + HOLD_TIMEOUT;
-    return m_hold_deadline;
 }
 
 bool CWin11TaskbarDlg::UseCompactOuterMargins() const
 {
     //Count only the item rects and inter-item gaps when reserving tray space.
-    return theApp.m_taskbar_data.reserve_taskbar_space && m_taskbar_on_top_or_bottom;
+    return theApp.m_taskbar_data.reserve_taskbar_space && m_taskbar_on_top_or_bottom
+        && !m_is_secondary_display;
 }
 
 void CWin11TaskbarDlg::OnCancel()

@@ -94,20 +94,5 @@ private:
     bool m_tray_timer_started{ false };
     //Where the reserved region was last time we placed the window, to detect movement
     CRect m_last_reserved_rect{ 0, 0, 0, 0 };
-    //预留区域建好之前，窗口保持隐藏的最长时间。
-    //实测占位图标一个一个加进去、区域建成大约要两秒，所以正常情况下只会隐藏这么久。
-    //一直建不起来时（占位图标没能被标记为始终显示、用户在设置里把它们关掉、
-    //外壳拒绝添加等）不能就这样一直不显示，超过这个时限就回到普通的摆放方式。
-    //取8秒：既给了正常情况四倍的余量，万一失败也不会让用户对着空任务栏发呆太久。
-    //Longest the window stays hidden while the reserved region is being built. Measured, the
-    //placeholders go in one per tick and the region is ready in about two seconds, so that is
-    //all the delay there normally is. If it never becomes ready - placeholders not marked
-    //always-visible, the user switching them off in Settings, the shell refusing adds - staying
-    //invisible forever is not acceptable, so past this deadline it falls back to ordinary
-    //placement. Eight seconds gives the normal case 4x headroom without leaving the user staring
-    //at an empty taskbar for long when it fails.
-    static constexpr ULONGLONG HOLD_TIMEOUT = 8000;
-    ULONGLONG m_hold_deadline{};
-    //首次调用时开始计时，之后返回同一个截止时间 / starts the clock on first call
-    ULONGLONG HoldDeadline();
+
 };

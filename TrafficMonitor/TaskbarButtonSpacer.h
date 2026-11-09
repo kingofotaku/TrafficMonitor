@@ -187,14 +187,13 @@ private:
     //Rotating costs almost nothing - the purge already removed the entries, so a dead block
     //leaves nothing in the registry, only a few records in the shell's memory that go away when
     //Explorer restarts. Once exhausted it stops rotating and the caller's timeout falls back to
-    //ordinary placement.
+    //a hidden readout instead of overlapping task buttons.
     static constexpr int MAX_GUID_BLOCKS = 64;
     //添加了图标却一直拿不到可用区域，超过这个时间就认为这批GUID已经作废，换一批重来
-    //If icons were added but no usable region appears within this long, treat the batch as dead
+    //If the complete requested region remains unavailable this long, treat the batch as dead
     //and rotate to a fresh one
     static constexpr ULONGLONG ROTATE_GRACE = 6000;
     ULONGLONG m_first_icon_tick{};
-    std::atomic<bool> m_ever_valid{ false };
 
     //单个占位图标实际占用的宽度。先用一个按DPI缩放的估计值，再按屏幕上真实的图标修正，
     //而且只允许改小：改小意味着需要更多图标、预留区域变宽，量出来的间距不变，能够收敛；
