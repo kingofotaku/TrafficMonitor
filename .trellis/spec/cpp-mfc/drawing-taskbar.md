@@ -105,3 +105,30 @@ Reference files:
 - `TrafficMonitor/SkinFile.h`, `TrafficMonitor/SkinManager.h`
 - `TrafficMonitor/CommonData.h` (`TaskBarSettingData`),
   `TrafficMonitor/TaskBarSettingsDlg.h`, `TrafficMonitor/TaskbarColorDlg.h`
+
+## Windows 11 tray space reservation
+
+Opt-in `TaskBarSettingData::reserve_taskbar_space` reserves actual tray slots through
+`CTaskbarTrayReserve` (`TaskbarButtonSpacer.*`), ported from upstream PR #2387
+through commit `991f80c8d2aa36dd9fe93d4fad4f5219ce755897`. This adds transparent
+`Shell_NotifyIcon` entries and marks only those entries always visible. A cached UI
+Automation query on a worker thread locates their actual bounds; the readout sits
+inside that measured region. No Explorer injection or XAML style is used.
+
+- Default is off; load/save and the Win11 settings checkbox share the existing settings path.
+- Reservation supports the primary horizontal taskbar; secondary and vertical placement
+  retain the existing placement path. Disabling reservation preserves the fork's original
+  alignment, coordinate conversion and secondary-display clock fallback.
+- DPI changes reset the measured tray pitch. Explorer restarts re-register the slots.
+- A foreign icon inside the block makes the readout hide until the obstruction is removed.
+- Normal exit removes live icons but retains the fixed per-icon shell state for reuse;
+  switching the option off purges only this feature's GUID-prefixed settings.
+- `WM_SPACER_LAYOUT_CHANGED` uses `WM_USER+1012`; `WM_USER+1011` remains owned by
+  the fork's network reinitialization message. Checkbox ID 1224 avoids existing controls.
+- Placement compares the desired rectangle with the actual child-window rectangle so
+  horizontal/vertical offset settings apply even when the reserved region stays still.
+
+Validate full and Lite x64 via the branch-only `taskbar-reservation.yml` workflow
+on windows-2022. Runtime acceptance requires an enabled reservation at 3840x2160
+with 150% scaling, no task-button or foreign-icon intersection, and working offsets,
+close/reopen and Explorer-restart recovery. Record any scenario left untested.

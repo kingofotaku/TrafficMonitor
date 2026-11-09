@@ -258,7 +258,10 @@ bool CWin11TaskbarDlg::UpdateTrayReserve()
         + DPI(theApp.m_taskbar_data.window_offset_top);
 
     m_rect.MoveToXY(x, y);
-    if (rc_reserved != m_last_reserved_rect || m_rect.Width() != m_window_width)
+    CRect current_rect;
+    GetWindowRect(current_rect);
+    current_rect.OffsetRect(-m_rcTaskbar.left, -m_rcTaskbar.top);
+    if (rc_reserved != m_last_reserved_rect || current_rect != m_rect)
     {
         m_last_reserved_rect = rc_reserved;
         MoveWindow(m_rect);
@@ -274,29 +277,6 @@ ULONGLONG CWin11TaskbarDlg::HoldDeadline()
     if (m_hold_deadline == 0)
         m_hold_deadline = GetTickCount64() + HOLD_TIMEOUT;
     return m_hold_deadline;
-}
-
-bool CWin11TaskbarDlg::IsAvoidingRightWidgets() const
-{
-    //Purely the user's checkbox. The old extra conditions ("taskbar not centred" and "system
-    //reports widgets shown") each silently disabled the option: the latter reads TaskbarDa,
-    //which is 0 whenever widgets are off, so ticking the box did nothing at all.
-    return theApp.m_taskbar_data.avoid_overlap_with_widgets;
-}
-
-bool CWin11TaskbarDlg::ShouldMoveToLeftForWidgets() const
-{
-    //Move to the left side only when:
-    //1. the taskbar is centred (only then is there free space before the first button);
-    //2. the "taskbar window on left" option is ticked;
-    //3. that free space genuinely fits the whole window - never overlap a button for this.
-    if (!CWindowsSettingHelper::IsTaskbarCenterAlign())
-        return false;
-    if (!theApp.m_taskbar_data.tbar_wnd_on_left)
-        return false;
-    //With a centred taskbar the Start button is the first button of the strip
-    const int free_left = m_rcStart.left - DPI(RESERVE_PADDING);
-    return m_window_width <= free_left;
 }
 
 bool CWin11TaskbarDlg::UseCompactOuterMargins() const

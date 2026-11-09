@@ -51,15 +51,6 @@ private:
     //caller falls back to the original placement.
     bool UpdateTrayReserve();
 
-    //Whether to leave room for widgets on the right. Driven purely by the user's checkbox:
-    //widget detection relies on a registry value that can read 0 even when widgets are
-    //shown, so second-guessing the user only makes the option do nothing.
-    bool IsAvoidingRightWidgets() const;
-    //Whether to move the window to the taskbar's left side. Only when the taskbar is
-    //centred, the option is ticked, AND the free space there fits the whole window -
-    //otherwise it stays on the right rather than overlapping any button.
-    bool ShouldMoveToLeftForWidgets() const;
-
     HWND m_hNotify;     //handle of the notification area
     HWND m_hStart;      //handle of the Start button
     CRect m_rcNotify;   //rect of the notification area
