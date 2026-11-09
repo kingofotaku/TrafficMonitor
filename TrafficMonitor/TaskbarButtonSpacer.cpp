@@ -177,31 +177,8 @@ bool CTaskbarTrayReserve::EnsureWindow()
     if (m_icon == nullptr)
         m_icon = CreateBlankTrayIcon();
 
-    //清理上一次运行遗留下来的占位图标注册表项。正常退出时Destroy()会清理，
-    //但崩溃或者被强制结束进程时不会，这些残留会一直堆积在用户的设置里。
-    //Delete placeholder entries left over by a previous run. Destroy() cleans up on a normal
-    //exit, but a crash or a force-kill skips it, and those orphans would otherwise pile up in
-    //the notification-area settings forever.
-    HKEY root{};
-    if (RegOpenKeyExW(HKEY_CURRENT_USER, NOTIFY_ICON_SETTINGS_KEY, 0, KEY_READ | KEY_SET_VALUE, &root) == ERROR_SUCCESS)
-    {
-        for (const auto& name : EnumNotifyIconKeys())
-        {
-            HKEY sub{};
-            if (RegOpenKeyExW(root, name.c_str(), 0, KEY_READ, &sub) != ERROR_SUCCESS)
-                continue;
-            wchar_t tip[256]{};
-            DWORD size = sizeof(tip);
-            DWORD type{};
-            const bool is_ours = (RegQueryValueExW(sub, L"InitialTooltip", nullptr, &type,
-                reinterpret_cast<LPBYTE>(tip), &size) == ERROR_SUCCESS
-                && type == REG_SZ && wcscmp(tip, TRAY_RESERVE_TIP) == 0);
-            RegCloseKey(sub);
-            if (is_ours)
-                RegDeleteKeyW(root, name.c_str());
-        }
-        RegCloseKey(root);
-    }
+    //Keep the fixed-GUID shell records across runs; deleting them invalidates Explorer's
+    //cached icon identities until Explorer restarts. Explicit disable owns key cleanup.
     return true;
 }
 
@@ -815,8 +792,13 @@ void CTaskbarTrayReserve::QueryThreadProc()
                 CRect rc_taskbar;
                 const bool taskbar_ok = (taskbar != nullptr
                     && ::GetWindowRect(taskbar, rc_taskbar) && !rc_taskbar.IsRectEmpty());
+                //Shell_TrayWnd also contains our cross-process MFC child. Enumerating it can
+                //make Explorer synchronously call us while we wait for Shell_NotifyIcon.
+                HWND xaml_host = ::FindWindowExW(taskbar, nullptr,
+                    L"Windows.UI.Composition.DesktopWindowContentBridge", nullptr);
                 CComPtr<IUIAutomationElement> taskbar_element;
-                if (taskbar_ok && SUCCEEDED(uia->ElementFromHandle(taskbar, &taskbar_element))
+                if (taskbar_ok && xaml_host != nullptr
+                    && SUCCEEDED(uia->ElementFromHandle(xaml_host, &taskbar_element))
                     && taskbar_element != nullptr)
                 {
                     //枚举任务栏里所有的按钮，而不是只找自己的占位图标。

@@ -132,3 +132,19 @@ Validate full and Lite x64 via the branch-only `taskbar-reservation.yml` workflo
 on windows-2022. Runtime acceptance requires an enabled reservation at 3840x2160
 with 150% scaling, no task-button or foreign-icon intersection, and working offsets,
 close/reopen and Explorer-restart recovery. Record any scenario left untested.
+
+### Startup responsiveness
+
+UI Automation must start at the Explorer-owned
+`Windows.UI.Composition.DesktopWindowContentBridge` child, not `Shell_TrayWnd`.
+The latter also contains TrafficMonitor's foreign-process MFC child: descendant
+enumeration can synchronously call back into its UI thread while that thread
+waits in `Shell_NotifyIcon`. A captured startup wait chain showed Explorer waiting
+on a send-message to TrafficMonitor; stopping TrafficMonitor recovered the same
+Explorer process. Keep fixed-GUID notification settings on startup as well as
+normal exit; only explicitly disabling the feature purges them.
+
+After changes, verify repeated launches with a bounded taskbar response probe.
+The probe must stop only the test TrafficMonitor on failure, preserve the wait
+chain, and confirm Explorer recovers without a restart. Also inspect that the
+readout still occupies the transparent tray slots at the current DPI.
