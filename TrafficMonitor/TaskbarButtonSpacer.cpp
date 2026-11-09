@@ -1,10 +1,16 @@
 ﻿#include "stdafx.h"
+#include "TrayStartupTrace.h"
 #include "TaskbarButtonSpacer.h"
 #include <uiautomation.h>
 #include <shellapi.h>
 #include <strsafe.h>
 #include <algorithm>
 
+static BOOL TraceShellNotifyIcon(DWORD message, PNOTIFYICONDATAW data)
+{
+    CTrayStartupTrace trace(message == NIM_ADD ? "Shell_NotifyIcon ADD" : "Shell_NotifyIcon DELETE");
+    return Shell_NotifyIconW(message, data);
+}
 CTaskbarTrayReserve* CTaskbarTrayReserve::m_instance{};
 
 //占位图标宿主窗口的窗口类名 / window class of the hidden icon-owner window
@@ -145,6 +151,7 @@ CTaskbarTrayReserve::~CTaskbarTrayReserve()
 
 bool CTaskbarTrayReserve::EnsureWindow()
 {
+    CTrayStartupTrace trace("bool CTaskbarTrayReserve::EnsureWindow()");
     if (m_wnd != nullptr && ::IsWindow(m_wnd))
         return true;
 
@@ -268,6 +275,7 @@ bool CTaskbarTrayReserve::PromoteIcon(int index, const std::vector<std::wstring>
 
 void CTaskbarTrayReserve::EnsurePromoted()
 {
+    CTrayStartupTrace trace("void CTaskbarTrayReserve::EnsurePromoted()");
     if (m_pending_promote.empty())
         return;
 
@@ -363,8 +371,8 @@ void CTaskbarTrayReserve::EnsurePromoted()
             nid.guidItem = MakeIconGuid(index);
             nid.hIcon = m_icon;
             StringCchCopyW(nid.szTip, ARRAYSIZE(nid.szTip), TRAY_RESERVE_TIP);
-            Shell_NotifyIconW(NIM_DELETE, &nid);
-            Shell_NotifyIconW(NIM_ADD, &nid);
+            TraceShellNotifyIcon(NIM_DELETE, &nid);
+            TraceShellNotifyIcon(NIM_ADD, &nid);
         }
     }
     m_pending_promote = std::move(still_pending);
@@ -372,6 +380,7 @@ void CTaskbarTrayReserve::EnsurePromoted()
 
 bool CTaskbarTrayReserve::AddIcon(int index)
 {
+    CTrayStartupTrace trace("bool CTaskbarTrayReserve::AddIcon(int index)");
     if (!EnsureWindow())
         return false;
 
@@ -386,11 +395,11 @@ bool CTaskbarTrayReserve::AddIcon(int index)
     //Step 1: add once so Windows creates the registry entry. That entry does not exist until
     //the icon has been added at least once, so IsPromoted cannot simply be written up front.
     const std::vector<std::wstring> keys_before = EnumNotifyIconKeys();
-    if (!Shell_NotifyIconW(NIM_ADD, &nid))
+    if (!TraceShellNotifyIcon(NIM_ADD, &nid))
     {
         //The GUID may still be held by an instance that did not exit cleanly - drop it and retry
-        Shell_NotifyIconW(NIM_DELETE, &nid);
-        if (!Shell_NotifyIconW(NIM_ADD, &nid))
+        TraceShellNotifyIcon(NIM_DELETE, &nid);
+        if (!TraceShellNotifyIcon(NIM_ADD, &nid))
             return false;
     }
 
@@ -398,8 +407,8 @@ bool CTaskbarTrayReserve::AddIcon(int index)
     //Without this the icon sits in the "Show Hidden Icons" flyout and reserves nothing at all.
     if (PromoteIcon(index, keys_before))
     {
-        Shell_NotifyIconW(NIM_DELETE, &nid);
-        Shell_NotifyIconW(NIM_ADD, &nid);
+        TraceShellNotifyIcon(NIM_DELETE, &nid);
+        TraceShellNotifyIcon(NIM_ADD, &nid);
     }
     else
     {
@@ -418,7 +427,7 @@ void CTaskbarTrayReserve::RemoveIcon(int index)
     nid.hWnd = m_wnd;
     nid.uFlags = NIF_GUID;
     nid.guidItem = MakeIconGuid(index);
-    Shell_NotifyIconW(NIM_DELETE, &nid);
+    TraceShellNotifyIcon(NIM_DELETE, &nid);
 }
 
 void CTaskbarTrayReserve::RefineSlotWidth(int reserved_width, int icon_count)
@@ -498,6 +507,7 @@ int CTaskbarTrayReserve::GetSlotWidth() const
 
 void CTaskbarTrayReserve::SetReservedWidth(int width)
 {
+    CTrayStartupTrace trace("void CTaskbarTrayReserve::SetReservedWidth(int width)");
     if (m_shell_restarted.exchange(false))
     {
         //资源管理器重启了。外壳里的占位图标已经全没了，这里把本地的记录一并清空，
@@ -783,6 +793,7 @@ void CTaskbarTrayReserve::QueryThreadProc()
             const ULONGLONG query_start = GetTickCount64();
             const int expected = m_icon_count;
 
+            CTrayStartupTrace query_trace("UIA query");
             CRect union_rect{ 0, 0, 0, 0 };
             std::vector<CRect> others;      //别人的托盘图标 / other programs' tray icons
             int found{};
@@ -990,6 +1001,7 @@ void CTaskbarTrayReserve::QueryThreadProc()
 
 void CTaskbarTrayReserve::Destroy(bool purge_keys)
 {
+    CTrayStartupTrace trace("void CTaskbarTrayReserve::Destroy(bool purge_keys)");
     m_thread_exit = true;
     if (m_wake_event != nullptr)
         SetEvent(m_wake_event);

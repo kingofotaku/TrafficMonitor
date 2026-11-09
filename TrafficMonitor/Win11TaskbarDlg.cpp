@@ -1,4 +1,5 @@
 ﻿#include "stdafx.h"
+#include "TrayStartupTrace.h"
 #include "Win11TaskbarDlg.h"
 #include "WindowsSettingHelper.h"
 
@@ -214,6 +215,7 @@ void CWin11TaskbarDlg::AdjustTaskbarWndPos(bool force_adjust)
 
 bool CWin11TaskbarDlg::UpdateTrayReserve()
 {
+    CTrayStartupTrace trace("bool CWin11TaskbarDlg::UpdateTrayReserve()");
     //副显示器没有自己的通知区域，无法在上面预留空间
     //Secondary displays have no tray of their own, so nothing can be reserved there
     if (m_is_secondary_display)
