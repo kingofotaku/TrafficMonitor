@@ -2,7 +2,6 @@
 //
 
 #include "stdafx.h"
-#include "TrayStartupTrace.h"
 #include "TrafficMonitor.h"
 #include "TaskBarDlg.h"
 #include "afxdialogex.h"
@@ -426,7 +425,6 @@ void CTaskBarDlg::DrawPluginItem(IDrawCommon& drawer, IPluginItem* item, CRect r
 
 void CTaskBarDlg::MoveWindow(CRect rect)
 {
-    CTrayStartupTrace trace("void CTaskBarDlg::MoveWindow(CRect rect)");
     if (IsWindow(GetSafeHwnd()))
     {
         ::MoveWindow(GetSafeHwnd(), rect.left, rect.top, rect.Width(), rect.Height(), TRUE);
@@ -1024,7 +1022,6 @@ bool CTaskBarDlg::IsTaskbarCloseToIconEnable(bool taskbar_wnd_on_left)
 
 BOOL CTaskBarDlg::OnInitDialog()
 {
-    CTrayStartupTrace trace("BOOL CTaskBarDlg::OnInitDialog()");
     CDialogEx::OnInitDialog();
 
     // TODO:  在此添加额外的初始化

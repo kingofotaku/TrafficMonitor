@@ -4,7 +4,6 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
-#include <atlbase.h>
 
 //通过在通知区域中添加若干个完全透明的占位图标，为任务栏窗口预留空间。
 //Reserve space for the taskbar window by adding fully transparent placeholder icons to the
@@ -30,10 +29,8 @@
 //width. It must be marked always-visible in the registry
 //(HKCU\Control Panel\NotifyIconSettings\<key>\IsPromoted) before it reserves anything.
 //
-//占位图标的实际位置通过UI自动化在后台线程中查询
-//（UI自动化的跨进程调用会抽取消息队列，在界面线程中调用会导致重入问题）。
-//The icons' real position is queried on a background thread through UI Automation (its
-//cross-process calls pump the message queue, which would re-enter the UI thread).
+//The background thread queries only our fixed GUIDs with Shell_NotifyIconGetRect.
+//Do not enumerate the taskbar UI tree: it also contains our cross-process MFC child.
 class CTaskbarTrayReserve
 {
 public:
@@ -177,7 +174,7 @@ private:
     //again, so that batch is dead. Moving to another block is a fresh set of identities that
     //sidesteps the dead one.
     GUID MakeIconGuid(int index) const;
-    int m_guid_block{};
+    std::atomic<int> m_guid_block{ 0 };
     //最多换多少次块。用户在同一次Windows会话里反复开关这个功能时会消耗块号：
     //每次关闭都会清掉注册表项，于是下次打开时那一批身份就作废了，得换一批。
     //反复开关十几次是很正常的操作，所以上限不能定得太小。

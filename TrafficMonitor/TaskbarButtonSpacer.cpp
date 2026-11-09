@@ -1,26 +1,15 @@
 ﻿#include "stdafx.h"
-#include "TrayStartupTrace.h"
 #include "TaskbarButtonSpacer.h"
-#include <uiautomation.h>
 #include <shellapi.h>
 #include <strsafe.h>
 #include <algorithm>
 
-static BOOL TraceShellNotifyIcon(DWORD message, PNOTIFYICONDATAW data)
-{
-    CTrayStartupTrace trace(message == NIM_ADD ? "Shell_NotifyIcon ADD" : "Shell_NotifyIcon DELETE");
-    return Shell_NotifyIconW(message, data);
-}
 CTaskbarTrayReserve* CTaskbarTrayReserve::m_instance{};
 
 //占位图标宿主窗口的窗口类名 / window class of the hidden icon-owner window
 static const wchar_t* TRAY_RESERVE_WINDOW_CLASS = L"TrafficMonitorTrayReserve";
-//这段文字既是占位图标的提示文本，也是UI自动化里认出自己图标的依据，
-//同时还是用户在"设置－个性化－任务栏－其它系统托盘图标"里看到的名字，
-//所以要短、要一眼能看出是谁放的。
-//This text is the placeholder's tooltip, the name UI Automation matches our own icons on, and
-//what the user sees in Settings > Personalisation > Taskbar > "Other system tray icons" - so
-//keep it short and make it obvious who put it there.
+//占位图标的提示文本及通知区域设置中显示的名称。
+//Placeholder tooltip and the name shown in notification-area settings.
 static const wchar_t* TRAY_RESERVE_TIP = L"TrafficMonitor reserved";
 //存放通知区域图标显示设置的注册表路径 / registry path for tray icon visibility
 static const wchar_t* NOTIFY_ICON_SETTINGS_KEY = L"Control Panel\\NotifyIconSettings";
@@ -92,8 +81,9 @@ GUID CTaskbarTrayReserve::MakeIconGuid(int index) const
     //never overlap another block's slots. Within a block each slot's GUID is fixed, so it maps
     //to the same registry entry across restarts rather than creating a fresh pile every launch.
     GUID guid{ 0x5c8e2b7d, 0x41a6, 0x4f39, { 0xb2, 0x5d, 0xc8, 0x93, 0x00, 0x00 } };
-    guid.Data4[4] = static_cast<unsigned char>((m_guid_block >> 8) & 0xFF);
-    guid.Data4[5] = static_cast<unsigned char>(m_guid_block & 0xFF);
+    const int guid_block = m_guid_block;
+    guid.Data4[4] = static_cast<unsigned char>((guid_block >> 8) & 0xFF);
+    guid.Data4[5] = static_cast<unsigned char>(guid_block & 0xFF);
     guid.Data4[6] = static_cast<unsigned char>((index >> 8) & 0xFF);
     guid.Data4[7] = static_cast<unsigned char>(index & 0xFF);
     return guid;
@@ -151,7 +141,6 @@ CTaskbarTrayReserve::~CTaskbarTrayReserve()
 
 bool CTaskbarTrayReserve::EnsureWindow()
 {
-    CTrayStartupTrace trace("bool CTaskbarTrayReserve::EnsureWindow()");
     if (m_wnd != nullptr && ::IsWindow(m_wnd))
         return true;
 
@@ -275,7 +264,6 @@ bool CTaskbarTrayReserve::PromoteIcon(int index, const std::vector<std::wstring>
 
 void CTaskbarTrayReserve::EnsurePromoted()
 {
-    CTrayStartupTrace trace("void CTaskbarTrayReserve::EnsurePromoted()");
     if (m_pending_promote.empty())
         return;
 
@@ -371,8 +359,8 @@ void CTaskbarTrayReserve::EnsurePromoted()
             nid.guidItem = MakeIconGuid(index);
             nid.hIcon = m_icon;
             StringCchCopyW(nid.szTip, ARRAYSIZE(nid.szTip), TRAY_RESERVE_TIP);
-            TraceShellNotifyIcon(NIM_DELETE, &nid);
-            TraceShellNotifyIcon(NIM_ADD, &nid);
+            Shell_NotifyIconW(NIM_DELETE, &nid);
+            Shell_NotifyIconW(NIM_ADD, &nid);
         }
     }
     m_pending_promote = std::move(still_pending);
@@ -380,7 +368,6 @@ void CTaskbarTrayReserve::EnsurePromoted()
 
 bool CTaskbarTrayReserve::AddIcon(int index)
 {
-    CTrayStartupTrace trace("bool CTaskbarTrayReserve::AddIcon(int index)");
     if (!EnsureWindow())
         return false;
 
@@ -395,11 +382,11 @@ bool CTaskbarTrayReserve::AddIcon(int index)
     //Step 1: add once so Windows creates the registry entry. That entry does not exist until
     //the icon has been added at least once, so IsPromoted cannot simply be written up front.
     const std::vector<std::wstring> keys_before = EnumNotifyIconKeys();
-    if (!TraceShellNotifyIcon(NIM_ADD, &nid))
+    if (!Shell_NotifyIconW(NIM_ADD, &nid))
     {
         //The GUID may still be held by an instance that did not exit cleanly - drop it and retry
-        TraceShellNotifyIcon(NIM_DELETE, &nid);
-        if (!TraceShellNotifyIcon(NIM_ADD, &nid))
+        Shell_NotifyIconW(NIM_DELETE, &nid);
+        if (!Shell_NotifyIconW(NIM_ADD, &nid))
             return false;
     }
 
@@ -407,8 +394,8 @@ bool CTaskbarTrayReserve::AddIcon(int index)
     //Without this the icon sits in the "Show Hidden Icons" flyout and reserves nothing at all.
     if (PromoteIcon(index, keys_before))
     {
-        TraceShellNotifyIcon(NIM_DELETE, &nid);
-        TraceShellNotifyIcon(NIM_ADD, &nid);
+        Shell_NotifyIconW(NIM_DELETE, &nid);
+        Shell_NotifyIconW(NIM_ADD, &nid);
     }
     else
     {
@@ -427,7 +414,7 @@ void CTaskbarTrayReserve::RemoveIcon(int index)
     nid.hWnd = m_wnd;
     nid.uFlags = NIF_GUID;
     nid.guidItem = MakeIconGuid(index);
-    TraceShellNotifyIcon(NIM_DELETE, &nid);
+    Shell_NotifyIconW(NIM_DELETE, &nid);
 }
 
 void CTaskbarTrayReserve::RefineSlotWidth(int reserved_width, int icon_count)
@@ -437,18 +424,7 @@ void CTaskbarTrayReserve::RefineSlotWidth(int reserved_width, int icon_count)
     const int measured = reserved_width / icon_count;
     if (measured <= 0)
         return;
-    //测量值必须有下限。刷新一个图标要先删后加，这中间UI自动化会短暂地同时看到
-    //旧的和新的两个元素，这一瞬采样数出来的图标偏多，算出的间距就偏小。
-    //而这个估计值只降不升，一旦被这种瞬时采样带偏就再也回不来了：
-    //间距越小算出来需要的图标越多，之后每次都预留过多的宽度，只能重启程序才能恢复。
-    //真实的图标间距不可能小到这个程度，低于下限的样本一定是错的，直接丢弃。
-    //The measurement needs a floor. Refreshing an icon means delete-then-add, and in between
-    //UI Automation briefly sees both the outgoing and the incoming element, so a sample taken
-    //at that instant counts too many icons and computes too small a pitch. Since the estimate
-    //only ever narrows, one such sample poisons it permanently: a smaller pitch means more
-    //icons are requested, and the reservation over-allocates for the rest of the session with
-    //no way back short of restarting. A real tray pitch is never that small, so anything below
-    //the floor is provably a bad sample and is discarded.
+    //Ignore measurements below the minimum plausible slot width at this DPI.
     if (measured < GetSlotWidthFloor())
         return;
     //只允许把估计值改小。改大会导致图标变少、区域变窄、估计值又变大，
@@ -507,7 +483,6 @@ int CTaskbarTrayReserve::GetSlotWidth() const
 
 void CTaskbarTrayReserve::SetReservedWidth(int width)
 {
-    CTrayStartupTrace trace("void CTaskbarTrayReserve::SetReservedWidth(int width)");
     if (m_shell_restarted.exchange(false))
     {
         //资源管理器重启了。外壳里的占位图标已经全没了，这里把本地的记录一并清空，
@@ -740,268 +715,143 @@ void CTaskbarTrayReserve::EnsureWinEventHook()
 
 void CTaskbarTrayReserve::QueryThreadProc()
 {
-    //COM in an MTA: UI Automation's cross-process calls pump the message queue, which would
-    //re-enter the UI thread if this ran there.
-    CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    CRect last_rect{ 0, 0, 0, 0 };
+    int obstruct_streak{};
+    int stable_count{};
+    int query_interval{ QUERY_INTERVAL_FAST };
+    while (!m_thread_exit)
     {
-        CComPtr<IUIAutomation> uia;
-        CoCreateInstance(__uuidof(CUIAutomation), nullptr, CLSCTX_INPROC_SERVER,
-            __uuidof(IUIAutomation), reinterpret_cast<void**>(&uia));
-
-        //把要读的属性一次性打包在查询里带回来。
-        //原来是先FindAll拿到元素列表，再对每个元素分别取一次名字、一次矩形——
-        //每一次都是一趟到资源管理器任务栏线程的跨进程往返。任务栏上有几十个按钮，
-        //再加上最多48个占位图标，一次查询就是一两百趟往返，而查询最快每秒五次，
-        //任务栏线程光是伺候这些调用就忙不过来，用起来明显发卡。
-        //改成缓存请求之后整次查询只有一趟往返：搜索在资源管理器那边就地完成，
-        //名字和矩形随结果一起打包送回来，之后全在本地读缓存。
-        //Ask for the properties up front, packed into the query itself. Previously FindAll
-        //fetched the element list and then each element's name and rectangle were read one call
-        //at a time - every one a cross-process round trip serviced by Explorer's taskbar thread.
-        //With a few dozen taskbar buttons plus up to 48 placeholders that is one to two hundred
-        //round trips per query, at up to five queries a second, and the taskbar thread spent so
-        //much time answering us that it became visibly sluggish. With a cache request the whole
-        //query is a single round trip: the search runs inside Explorer, the name and rectangle
-        //come back with the results, and everything after that is read locally.
-        CComPtr<IUIAutomationCacheRequest> cache_request;
-        CComPtr<IUIAutomationCondition> button_condition;
-        if (uia != nullptr)
+        const ULONGLONG query_start = GetTickCount64();
+        const int expected = m_icon_count;
+        const int guid_block = m_guid_block;
+        CRect union_rect{ 0, 0, 0, 0 };
+        std::vector<CRect> slots;
+        HWND taskbar = ::FindWindowW(L"Shell_TrayWnd", nullptr);
+        CRect rc_taskbar;
+        if (taskbar != nullptr && ::GetWindowRect(taskbar, rc_taskbar) && !rc_taskbar.IsRectEmpty())
         {
-            if (SUCCEEDED(uia->CreateCacheRequest(&cache_request)) && cache_request != nullptr)
+            for (int index = 0; index < expected; index++)
             {
-                cache_request->AddProperty(UIA_NamePropertyId);
-                cache_request->AddProperty(UIA_BoundingRectanglePropertyId);
-                cache_request->put_TreeScope(TreeScope_Element);
-                //不需要拿着元素本身，也就不在资源管理器里留任何引用
-                //No live element is needed, so nothing stays referenced inside Explorer
-                cache_request->put_AutomationElementMode(AutomationElementMode_None);
-            }
-            VARIANT var{};
-            var.vt = VT_I4;
-            var.lVal = UIA_ButtonControlTypeId;
-            uia->CreatePropertyCondition(UIA_ControlTypePropertyId, var, &button_condition);
-            VariantClear(&var);
-        }
-
-        CRect last_rect{ 0, 0, 0, 0 };
-        //连续测到被遮挡的次数 / consecutive samples that saw an overlap
-        int obstruct_streak{};
-        int stable_count{};
-        int query_interval{ QUERY_INTERVAL_FAST };
-        while (!m_thread_exit)
-        {
-            const ULONGLONG query_start = GetTickCount64();
-            const int expected = m_icon_count;
-
-            CTrayStartupTrace query_trace("UIA query");
-            CRect union_rect{ 0, 0, 0, 0 };
-            std::vector<CRect> others;      //别人的托盘图标 / other programs' tray icons
-            int found{};
-            if (uia != nullptr && cache_request != nullptr && button_condition != nullptr && expected > 0)
-            {
-                HWND taskbar = ::FindWindowW(L"Shell_TrayWnd", nullptr);
-                CRect rc_taskbar;
-                const bool taskbar_ok = (taskbar != nullptr
-                    && ::GetWindowRect(taskbar, rc_taskbar) && !rc_taskbar.IsRectEmpty());
-                //Shell_TrayWnd also contains our cross-process MFC child. Enumerating it can
-                //make Explorer synchronously call us while we wait for Shell_NotifyIcon.
-                HWND xaml_host = ::FindWindowExW(taskbar, nullptr,
-                    L"Windows.UI.Composition.DesktopWindowContentBridge", nullptr);
-                CComPtr<IUIAutomationElement> taskbar_element;
-                if (taskbar_ok && xaml_host != nullptr
-                    && SUCCEEDED(uia->ElementFromHandle(xaml_host, &taskbar_element))
-                    && taskbar_element != nullptr)
-                {
-                    //枚举任务栏里所有的按钮，而不是只找自己的占位图标。
-                    //只找自己的就看不见别人：用户可以把别的程序的托盘图标拖到占位块中间，
-                    //那个图标落在预留区域里面，窗口一摆上去就正好把它盖住，
-                    //既看不见也点不到。要发现这种情况，就必须知道区域里还有没有别人的图标。
-                    //Enumerate every button in the taskbar, not just our own placeholders.
-                    //Looking only for our own makes other icons invisible to us: the user can
-                    //drag another program's tray icon into the middle of the placeholder block,
-                    //where it lands inside the reserved region and the window covers it - unable
-                    //to be seen or clicked. Spotting that requires knowing what else is in there.
-                    CComPtr<IUIAutomationElementArray> elements;
-                    if (SUCCEEDED(taskbar_element->FindAllBuildCache(TreeScope_Descendants,
-                            button_condition, cache_request, &elements))
-                        && elements != nullptr)
-                    {
-                        int length{};
-                        elements->get_Length(&length);
-                        for (int i = 0; i < length; i++)
-                        {
-                            CComPtr<IUIAutomationElement> element;
-                            if (FAILED(elements->GetElement(i, &element)) || element == nullptr)
-                                continue;
-                            RECT rc{};
-                            if (FAILED(element->get_CachedBoundingRectangle(&rc)))
-                                continue;
-                            //Discard nonsense: while the taskbar is being moved, UI Automation
-                            //briefly returns empty rects and elements that are not inside it at
-                            //all. Trusting those throws the window off-screen.
-                            if (rc.right <= rc.left || rc.bottom <= rc.top)
-                                continue;
-                            CRect rc_hit;
-                            if (!rc_hit.IntersectRect(rc_taskbar, CRect(rc)))
-                                continue;
-                            //用"包含"而不是"完全相等"来认自己的图标：外壳有可能在提示文本
-                            //前后加上别的内容，严格相等就会一个也认不出来。
-                            //Match by substring rather than exact equality: the shell may
-                            //decorate the tooltip, and strict equality would recognise none.
-                            CComBSTR name;
-                            const bool is_ours = (SUCCEEDED(element->get_CachedName(&name))
-                                && name != nullptr && wcsstr(name, TRAY_RESERVE_TIP) != nullptr);
-                            if (is_ours)
-                            {
-                                if (found == 0)
-                                    union_rect = rc;
-                                else
-                                    union_rect.UnionRect(union_rect, CRect(rc));
-                                found++;
-                            }
-                            else
-                            {
-                                others.push_back(CRect(rc));
-                            }
-                        }
-                    }
-                }
-            }
-
-            //UI自动化偶尔会在任务栏里一个元素都枚举不到——最容易复现的就是在任务栏上点右键、
-            //弹出"任务栏设置""任务管理器"那个菜单的时候（实测：平时能枚举到三十几个按钮，
-            //菜单弹出期间是0个）。这只是暂时看不见，占位图标其实一个都没少。
-            //这种时候必须原样保留上一次的结果：否则调用方会以为预留区域没了，
-            //把窗口藏起来，用户一点右键readout就消失。
-            //一个都枚举不到才算这种情况；只要还能看到别人的图标，说明枚举是有效的，
-            //那就是占位图标真的不见了，应当如实反映。
-            //UI Automation intermittently enumerates nothing at all inside the taskbar - most
-            //reproducibly while its own right-click menu is open (measured: ~37 buttons normally,
-            //0 while the menu is up). That is a blackout, not a real loss; every placeholder is
-            //still there. The previous result must be kept as-is, or the caller concludes the
-            //region is gone and hides the window - so the readout vanishes on right-click.
-            //Only a completely empty enumeration counts: if other programs' icons are still
-            //visible the enumeration worked, and genuinely missing placeholders should be
-            //reported honestly.
-            if (expected > 0 && found == 0 && others.empty())
-            {
-                if (m_wake_event != nullptr)
-                    WaitForSingleObject(m_wake_event, query_interval);
+                NOTIFYICONIDENTIFIER id{};
+                id.cbSize = sizeof(id);
+                id.guidItem = MakeIconGuid(index);
+                RECT rc{};
+                if (FAILED(Shell_NotifyIconGetRect(&id, &rc)))
+                    continue;
+                CRect hit;
+                if (rc.right <= rc.left || rc.bottom <= rc.top
+                    || !hit.IntersectRect(rc_taskbar, CRect(rc)))
+                    continue;
+                if (slots.empty())
+                    union_rect = rc;
                 else
-                    Sleep(query_interval);
-                continue;
+                    union_rect.UnionRect(union_rect, CRect(rc));
+                slots.push_back(CRect(rc));
             }
-
-            //Use whatever placeholders are genuinely on screen. Requiring all of them to be
-            //found makes the region permanently invalid whenever a single icon lags behind or
-            //stays hidden, and the window then never moves onto the space that does exist.
-            //The caller checks the width, so a partially filled region simply fits less.
-            const bool valid = (found > 0 && !union_rect.IsRectEmpty());
-
-            //预留区域里有没有夹着别人的图标。通知区域的图标可以被用户拖动重排，
-            //别的程序的图标完全可能被拖到两个占位图标中间，落在预留区域内部。
-            //这时窗口如果照常摆上去，就正好把那个图标盖在下面——用户既看不见它，
-            //也点不到它，只能把窗口挪开才能取回。调用方发现这个标志就把窗口藏起来，
-            //图标被拖走之后标志自动清除，窗口再自己回来。
-            //Whether someone else's icon is sitting inside the reserved region. Tray icons can
-            //be reordered by dragging, so another program's icon can land between two
-            //placeholders, inside the region. Placing the window there as usual would cover that
-            //icon - invisible and unclickable until the window moves away. The caller hides the
-            //window while this is set; once the icon is dragged out it clears and the window
-            //comes back on its own.
-            bool obstructed{};
+        }
+        //A GUID rotation during the query invalidates this snapshot.
+        if (guid_block != m_guid_block)
+            continue;
+        const int found = static_cast<int>(slots.size());
+        //A transient shell query failure must not hide an already positioned readout.
+        if (expected > 0 && found == 0)
+        {
+            if (m_wake_event != nullptr)
+                WaitForSingleObject(m_wake_event, query_interval);
+            else
+                Sleep(query_interval);
+            continue;
+        }
+        const bool valid = (found > 0 && !union_rect.IsRectEmpty());
+        //GetRect returns full tray slots. A gap means a foreign icon is inside our block;
+        //one physical pixel is allowed for fractional-DPI rounding between adjacent slots.
+        std::sort(slots.begin(), slots.end(), [](const CRect& a, const CRect& b) { return a.left < b.left; });
+        bool obstructed{};
+        for (size_t i = 1; i < slots.size(); i++)
+        {
+            if (slots[i].left > slots[i - 1].right + 1)
+            {
+                obstructed = true;
+                break;
+            }
+        }
+        //必须连续几次都测到才认定被遮挡。展开或收起"显示隐藏的图标"那个浮出窗口时，
+        //通知区域会重新排布一下，某个图标的矩形会有一瞬间落进预留区域里；
+        //只凭这一次采样就把窗口藏起来，用户点一下折叠按钮就会看到窗口闪一下
+        //（实测：开和关各闪一次，每次约100毫秒，位置并没有变）。
+        //真的把图标拖进来是会一直保持的，多等一两次采样完全无妨。
+        //恢复则不需要等：一旦不再重叠就立刻把窗口放出来。
+        //Only treat it as obstructed after several consecutive samples agree. Opening or
+        //closing the "Show Hidden Icons" flyout makes the tray re-lay out briefly, and some
+        //icon's rect lands inside the reserved region for an instant. Hiding on that single
+        //sample makes the window blink whenever the user clicks the chevron (measured: one
+        //blink on open and one on close, ~100ms each, with no change of position).
+        //An icon genuinely dragged in stays there, so waiting a sample or two costs nothing.
+        //Recovery is not delayed: the moment the overlap clears, the window comes back.
+        if (obstructed)
+        {
+            if (obstruct_streak < OBSTRUCT_CONFIRM)
+                obstruct_streak++;
+        }
+        else
+        {
+            obstruct_streak = 0;
+        }
+        m_obstructed = (obstruct_streak >= OBSTRUCT_CONFIRM);
+        bool changed{};
+        {
+            std::lock_guard<std::mutex> lock(m_rect_mutex);
+            changed = (valid != m_reserved_valid) || (valid && union_rect != m_reserved_rect);
+            m_reserved_valid = valid;
+            if (valid)
+                m_ever_valid = true;        //这一批GUID是好用的 / this batch works
             if (valid)
             {
-                for (const CRect& other : others)
-                {
-                    CRect hit;
-                    if (hit.IntersectRect(union_rect, other) && !hit.IsRectEmpty())
-                    {
-                        obstructed = true;
-                        break;
-                    }
-                }
-            }
-            //必须连续几次都测到才认定被遮挡。展开或收起"显示隐藏的图标"那个浮出窗口时，
-            //通知区域会重新排布一下，某个图标的矩形会有一瞬间落进预留区域里；
-            //只凭这一次采样就把窗口藏起来，用户点一下折叠按钮就会看到窗口闪一下
-            //（实测：开和关各闪一次，每次约100毫秒，位置并没有变）。
-            //真的把图标拖进来是会一直保持的，多等一两次采样完全无妨。
-            //恢复则不需要等：一旦不再重叠就立刻把窗口放出来。
-            //Only treat it as obstructed after several consecutive samples agree. Opening or
-            //closing the "Show Hidden Icons" flyout makes the tray re-lay out briefly, and some
-            //icon's rect lands inside the reserved region for an instant. Hiding on that single
-            //sample makes the window blink whenever the user clicks the chevron (measured: one
-            //blink on open and one on close, ~100ms each, with no change of position).
-            //An icon genuinely dragged in stays there, so waiting a sample or two costs nothing.
-            //Recovery is not delayed: the moment the overlap clears, the window comes back.
-            if (obstructed)
-            {
-                if (obstruct_streak < OBSTRUCT_CONFIRM)
-                    obstruct_streak++;
-            }
-            else
-            {
-                obstruct_streak = 0;
-            }
-            m_obstructed = (obstruct_streak >= OBSTRUCT_CONFIRM);
-            bool changed{};
-            {
-                std::lock_guard<std::mutex> lock(m_rect_mutex);
-                changed = (valid != m_reserved_valid) || (valid && union_rect != m_reserved_rect);
-                m_reserved_valid = valid;
-                if (valid)
-                    m_ever_valid = true;        //这一批GUID是好用的 / this batch works
-                if (valid)
-                {
-                    m_reserved_rect = union_rect;
-                    //Dividing the region by the number of icons that actually form it is the
-                    //only way to get the true slot pitch. Using the requested count instead
-                    //under-measures whenever an icon is still hidden, and the estimate then
-                    //spirals down and over-reserves.
-                    m_reserved_count = found;
-                }
-            }
-            if (changed)
-            {
-                HWND notify = m_notify_wnd;
-                if (notify != nullptr && ::IsWindow(notify))
-                    ::PostMessageW(notify, WM_SPACER_LAYOUT_CHANGED, 0, 0);
-            }
-
-            //Lengthen the interval once the position settles; snap back the moment it moves
-            if (changed || union_rect != last_rect)
-            {
-                stable_count = 0;
-                query_interval = QUERY_INTERVAL_FAST;
-            }
-            else if (++stable_count >= STABLE_COUNT_FOR_SLOW)
-            {
-                query_interval = QUERY_INTERVAL_SLOW;
-            }
-            last_rect = union_rect;
-
-            if (m_wake_event != nullptr)
-            {
-                WaitForSingleObject(m_wake_event, query_interval);
-                //Throttle: taskbar animations make the hook fire a flood of events
-                const ULONGLONG elapsed = GetTickCount64() - query_start;
-                if (!m_thread_exit && elapsed < MIN_QUERY_GAP)
-                    Sleep(static_cast<DWORD>(MIN_QUERY_GAP - elapsed));
-            }
-            else
-            {
-                for (int i = 0; i < query_interval / 50 && !m_thread_exit; i++)
-                    Sleep(50);
+                m_reserved_rect = union_rect;
+                //Dividing the region by the number of icons that actually form it is the
+                //only way to get the true slot pitch. Using the requested count instead
+                //under-measures whenever an icon is still hidden, and the estimate then
+                //spirals down and over-reserves.
+                m_reserved_count = found;
             }
         }
+        if (changed)
+        {
+            HWND notify = m_notify_wnd;
+            if (notify != nullptr && ::IsWindow(notify))
+                ::PostMessageW(notify, WM_SPACER_LAYOUT_CHANGED, 0, 0);
+        }
+
+        //Lengthen the interval once the position settles; snap back the moment it moves
+        if (changed || union_rect != last_rect)
+        {
+            stable_count = 0;
+            query_interval = QUERY_INTERVAL_FAST;
+        }
+        else if (++stable_count >= STABLE_COUNT_FOR_SLOW)
+        {
+            query_interval = QUERY_INTERVAL_SLOW;
+        }
+        last_rect = union_rect;
+
+        if (m_wake_event != nullptr)
+        {
+            WaitForSingleObject(m_wake_event, query_interval);
+            //Throttle: taskbar animations make the hook fire a flood of events
+            const ULONGLONG elapsed = GetTickCount64() - query_start;
+            if (!m_thread_exit && elapsed < MIN_QUERY_GAP)
+                Sleep(static_cast<DWORD>(MIN_QUERY_GAP - elapsed));
+        }
+        else
+        {
+            for (int i = 0; i < query_interval / 50 && !m_thread_exit; i++)
+                Sleep(50);
+        }
     }
-    CoUninitialize();
 }
 
 void CTaskbarTrayReserve::Destroy(bool purge_keys)
 {
-    CTrayStartupTrace trace("void CTaskbarTrayReserve::Destroy(bool purge_keys)");
     m_thread_exit = true;
     if (m_wake_event != nullptr)
         SetEvent(m_wake_event);

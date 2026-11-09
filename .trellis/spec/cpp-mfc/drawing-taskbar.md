@@ -111,8 +111,8 @@ Reference files:
 Opt-in `TaskBarSettingData::reserve_taskbar_space` reserves actual tray slots through
 `CTaskbarTrayReserve` (`TaskbarButtonSpacer.*`), ported from upstream PR #2387
 through commit `991f80c8d2aa36dd9fe93d4fad4f5219ce755897`. This adds transparent
-`Shell_NotifyIcon` entries and marks only those entries always visible. A cached UI
-Automation query on a worker thread locates their actual bounds; the readout sits
+`Shell_NotifyIcon` entries and marks only those entries always visible. A GUID-based
+`Shell_NotifyIconGetRect` query on a worker thread locates their bounds; the readout sits
 inside that measured region. No Explorer injection or XAML style is used.
 
 - Default is off; load/save and the Win11 settings checkbox share the existing settings path.
@@ -128,23 +128,28 @@ inside that measured region. No Explorer injection or XAML style is used.
 - Placement compares the desired rectangle with the actual child-window rectangle so
   horizontal/vertical offset settings apply even when the reserved region stays still.
 
-Validate full and Lite x64 via the branch-only `taskbar-reservation.yml` workflow
+Validate the full x64 build used on this machine via the branch-only `taskbar-reservation.yml` workflow
 on windows-2022. Runtime acceptance requires an enabled reservation at 3840x2160
 with 150% scaling, no task-button or foreign-icon intersection, and working offsets,
 close/reopen and Explorer-restart recovery. Record any scenario left untested.
 
 ### Startup responsiveness
 
-UI Automation must start at the Explorer-owned
-`Windows.UI.Composition.DesktopWindowContentBridge` child, not `Shell_TrayWnd`.
-The latter also contains TrafficMonitor's foreign-process MFC child: descendant
-enumeration can synchronously call back into its UI thread while that thread
-waits in `Shell_NotifyIcon`. A captured startup wait chain showed Explorer waiting
-on a send-message to TrafficMonitor; stopping TrafficMonitor recovered the same
-Explorer process. Keep fixed-GUID notification settings on startup as well as
-normal exit; only explicitly disabling the feature purges them.
+The worker queries only our fixed GUIDs through `Shell_NotifyIconGetRect`.
+Do not enumerate the taskbar's UI Automation tree: `Shell_TrayWnd` also contains
+TrafficMonitor's foreign-process MFC child. A captured startup wait chain showed
+Explorer waiting on a send-message to TrafficMonitor; stopping TrafficMonitor
+recovered the same Explorer process. Disabling reservation passed the response
+probe but brought back overlap, so both conditions are required for acceptance.
 
-After changes, verify repeated launches with a bounded taskbar response probe.
-The probe must stop only the test TrafficMonitor on failure, preserve the wait
-chain, and confirm Explorer recovers without a restart. Also inspect that the
-readout still occupies the transparent tray slots at the current DPI.
+The API returns full tray slots on the target Windows 11 build. Sort them by
+left edge; a gap greater than one physical pixel indicates an interleaved foreign
+icon. Preserve the existing consecutive-sample confirmation before hiding the
+readout. One pixel permits fractional-DPI rounding. The GUID block is atomic; a
+rotation during a query invalidates that snapshot. Keep fixed-GUID notification
+settings across startup and normal exit; explicit disable owns key cleanup.
+
+After changes, verify repeated launches with a bounded taskbar response probe and
+assert that the readout lies within the contiguous reserved slots at the current
+DPI. Stop only the test TrafficMonitor on failure and preserve the wait chain.
+The branch workflow builds the full x64 edition only, per the user's setup.
