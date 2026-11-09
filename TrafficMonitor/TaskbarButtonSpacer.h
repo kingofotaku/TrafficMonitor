@@ -180,14 +180,14 @@ private:
     //反复开关十几次是很正常的操作，所以上限不能定得太小。
     //换块几乎没有代价：关闭时已经把注册表项删干净了，作废的块不会在注册表里留下任何东西，
     //只是在外壳的内存里多几条记录，资源管理器一重启就没了。
-    //用光之后不再换，交给上层的超时逻辑回到普通摆放方式。
+    //用光之后停止换块，窗口保持隐藏，避免重新覆盖任务栏按钮。
     //Cap on rotations. Toggling the feature off and on within one Windows session consumes
     //blocks: each off purges the registry entries, so the next on finds that batch dead and has
     //to rotate. Flipping a setting a dozen times is entirely normal, so this cannot be small.
     //Rotating costs almost nothing - the purge already removed the entries, so a dead block
     //leaves nothing in the registry, only a few records in the shell's memory that go away when
-    //Explorer restarts. Once exhausted it stops rotating and the caller's timeout falls back to
-    //a hidden readout instead of overlapping task buttons.
+    //Explorer restarts. Once exhausted it stops rotating and keeps the readout hidden rather
+    //than overlapping task buttons.
     static constexpr int MAX_GUID_BLOCKS = 64;
     //添加了图标却一直拿不到可用区域，超过这个时间就认为这批GUID已经作废，换一批重来
     //If the complete requested region remains unavailable this long, treat the batch as dead

@@ -94,5 +94,4 @@ private:
     bool m_tray_timer_started{ false };
     //Where the reserved region was last time we placed the window, to detect movement
     CRect m_last_reserved_rect{ 0, 0, 0, 0 };
-
 };
