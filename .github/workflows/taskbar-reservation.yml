@@ -1,0 +1,32 @@
+name: Taskbar reservation validation
+on:
+  push:
+    branches: [codex/trafficmonitor-tray-space]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+      - uses: microsoft/setup-msbuild@v3
+      - name: Build full x64 with temperature support
+        run: msbuild TrafficMonitor.sln /m /p:Configuration=Release /p:Platform=x64 /p:PlatformToolset=v143 /v:minimal /nologo
+      - name: Build Lite x64
+        run: msbuild TrafficMonitor_Lite.sln /m '/p:Configuration=Release (lite)' /p:Platform=x64 /p:PlatformToolset=v143 /v:minimal /nologo
+      - uses: actions/upload-artifact@v7
+        with:
+          name: trafficmonitor-tray-space-full-x64
+          path: |
+            Bin/x64/Release/TrafficMonitor.exe
+            Bin/x64/Release/*.dll
+            TrafficMonitor/language/English.ini
+            TrafficMonitor/language/Simplified_Chinese.ini
+            TrafficMonitor/language/Traditional_Chinese.ini
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: trafficmonitor-tray-space-lite-x64
+          path: Bin/x64/Release (lite)/TrafficMonitor.exe
+          if-no-files-found: error
