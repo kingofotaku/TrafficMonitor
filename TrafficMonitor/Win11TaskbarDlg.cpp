@@ -16,9 +16,6 @@ void CWin11TaskbarDlg::AdjustTaskbarWndPos(bool force_adjust)
     if (::GetWindowRect(m_hStart, m_rcStart) && !m_rcStart.IsRectEmpty())
         m_rcStart.MoveToXY(m_rcStart.left - m_rcTaskbar.left, m_rcStart.top - m_rcTaskbar.top);
 
-    if (UseCompactOuterMargins())
-        CalculateWindowSize();
-
     //Window size
     m_rect.right = m_rect.left + m_window_width;
     m_rect.bottom = m_rect.top + m_window_height;

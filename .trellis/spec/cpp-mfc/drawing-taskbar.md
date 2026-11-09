@@ -160,11 +160,12 @@ At zero horizontal offset, align the readout with the reserved block's left edge
 so the tray overflow button is adjacent to the readout. Reserve only the actual
 readout width, rounded up to whole tray slots; do not add outer padding or center
 the readout inside leftover slot space. Preserve the font, colors, numeric
-alignment, item spacing and the non-reservation placement path. The first unlabeled
-network-speed pair fits its wider current row rather than the four-digit sample.
-Refresh this measurement in the existing placement tick so growing values remain readable.
-Runtime acceptance
-checks zero left inset, containment inside the reserved slots, and taskbar response.
+alignment, item spacing and the non-reservation placement path. Size columns from the
+configured sample capacity, not current live values. Do not recalculate width in the
+placement tick: changing the tray slot count makes Explorer repack the task buttons
+and flashes the readout. The user accepts leading numeric whitespace in exchange for
+a stable width. Runtime acceptance checks stable readout width and slot count while
+values change, containment inside the reserved slots, and taskbar response.
 
 ### Incomplete reservation recovery
 
