@@ -29,15 +29,6 @@ private:
     //interval, which keeps power use down.
     static constexpr UINT_PTR SPACER_ADJUST_TIMER = 1961;
     static constexpr UINT SPACER_ADJUST_INTERVAL = 1000;
-    //窗口两侧额外预留的空白（逻辑像素，按DPI缩放），使内容不至于紧贴旁边的托盘图标。
-    //这个值要留得很小：预留区域是按整个图标槽位（约42像素）向上取整的，
-    //多留几像素就可能多占一整个槽位，反而在窗口两边留下很大的空隙。
-    //Extra padding reserved on each side of the window (logical px, DPI scaled) so its contents
-    //do not sit flush against the neighbouring tray icons. Keep this small: the region is
-    //rounded up to whole icon slots (~42px), so a few extra pixels can cost an entire slot and
-    //leave a conspicuous gap on both sides of the window.
-    static constexpr int RESERVE_PADDING = 2;
-
     // inherited from CTaskBarDlg
     void InitTaskbarWnd() override;
     virtual void AdjustTaskbarWndPos(bool force_adjust) override;

@@ -231,10 +231,8 @@ bool CWin11TaskbarDlg::UpdateTrayReserve()
     m_tray_reserve.SetDpi(GetDPI());
     //按窗口实际需要的宽度预留，两边各留一点空白。
     //这里用的是实际算出来的窗口宽度，因此无论配置了多少个显示项目都能自动适应。
-    //Reserve whatever the window actually needs, plus a little breathing room on each side.
-    //Driven by the measured window width, so it scales with however many display items are
-    //configured rather than assuming any particular number.
-    m_tray_reserve.SetReservedWidth(m_window_width + DPI(RESERVE_PADDING) * 2);
+    //Reserve the readout width; whole-slot rounding provides any remaining space.
+    m_tray_reserve.SetReservedWidth(m_window_width);
 
     CRect rc_reserved{ 0, 0, 0, 0 };    //CRect's default constructor does not zero it
     const bool have_rect = m_tray_reserve.GetReservedRect(rc_reserved);
@@ -246,13 +244,10 @@ bool CWin11TaskbarDlg::UpdateTrayReserve()
     if (!IsWindowVisible())
         ShowWindow(SW_SHOWNA);
 
-    //把窗口居中放在预留区域里。预留区域是按整个图标槽位凑出来的，
-    //因此通常会比窗口稍宽一点。
-    //Centre the window inside the reserved region. The region is made of whole icon slots,
-    //so it is usually a little wider than the window.
+    //Left-align the readout so the tray overflow button is adjacent to its left edge.
     CRect rc_target{ rc_reserved };
     rc_target.OffsetRect(-m_rcTaskbar.left, -m_rcTaskbar.top);
-    const int x = rc_target.left + (rc_target.Width() - m_window_width) / 2
+    const int x = rc_target.left
         + DPI(theApp.m_taskbar_data.window_offset_left);
     const int y = rc_target.top + (rc_target.Height() - m_window_height) / 2
         + DPI(theApp.m_taskbar_data.window_offset_top);
@@ -281,9 +276,7 @@ ULONGLONG CWin11TaskbarDlg::HoldDeadline()
 
 bool CWin11TaskbarDlg::UseCompactOuterMargins() const
 {
-    //The tray-reservation path adds RESERVE_PADDING around the computed window width. Keeping
-    //CTaskBarDlg's outer item_space margins as well double-counts that edge padding and can push
-    //an otherwise fitting readout into one more whole tray slot.
+    //Count only the item rects and inter-item gaps when reserving tray space.
     return theApp.m_taskbar_data.reserve_taskbar_space && m_taskbar_on_top_or_bottom;
 }
 

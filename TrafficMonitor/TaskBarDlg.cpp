@@ -850,7 +850,7 @@ void CTaskBarDlg::CalculateWindowSize()
                 index++;
             }
             m_window_width += DPI(theApp.m_taskbar_data.item_space) * item_count;   //加上每个标签间的空隙
-            //The compact tray-reserved layout supplies its own edge padding. The item rects
+            //The compact tray-reserved layout uses only the item rects. Those rects
             //already contain every inter-item gap, so discard the otherwise unused trailing one.
             if (UseCompactOuterMargins() && item_count > 0)
                 m_window_width -= DPI(theApp.m_taskbar_data.item_space);
@@ -938,7 +938,7 @@ void CTaskBarDlg::CalculateWindowSize()
             // 保存总宽度
             m_window_width = current_x;
             //Each completed column advances past its own width by item_space, leaving a trailing
-            //margin. The reserved-tray path already pads the content, so keep only the gaps
+            //margin. The reserved-tray path keeps only the actual item rects and gaps
             //between columns and do not count either outer margin as readout width.
             if (compact_outer_margins && item_count > 0)
                 m_window_width -= item_space;

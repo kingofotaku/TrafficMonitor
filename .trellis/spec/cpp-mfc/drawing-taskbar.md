@@ -153,3 +153,12 @@ After changes, verify repeated launches with a bounded taskbar response probe an
 assert that the readout lies within the contiguous reserved slots at the current
 DPI. Stop only the test TrafficMonitor on failure and preserve the wait chain.
 The branch workflow builds the full x64 edition only, per the user's setup.
+
+### Compact left edge
+
+At zero horizontal offset, align the readout with the reserved block's left edge
+so the tray overflow button is adjacent to the readout. Reserve only the actual
+readout width, rounded up to whole tray slots; do not add outer padding or center
+the readout inside leftover slot space. Preserve the font, colors, numeric
+alignment, item spacing and the non-reservation placement path. Runtime acceptance
+checks zero left inset, containment inside the reserved slots, and taskbar response.
